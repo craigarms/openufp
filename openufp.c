@@ -60,10 +60,10 @@ int main(int argc, char**argv) {
     char *proxy_ip = NULL;
     int proxy_port = 0;
     char *proxy_deny_pattern = NULL;
-    char *blacklist = NULL;
     int squidguard = 0;
     int c;
     char *https = "https://";
+    static char blacklist[BLACKLIST_MAXSIZE][URL_SIZE] = {{""}};
 
     while ((c = getopt(argc, argv, "l:r:c:C:d:nwp:f:gu")) != -1) {
         char *p;
@@ -112,7 +112,8 @@ int main(int argc, char**argv) {
                 proxy_deny_pattern = p;
                 break;
             case 'f':
-                blacklist = optarg;
+                if (blacklist_load(optarg, blacklist) < 0)
+                  exit(1);
                 break;
             case 'g':
                 squidguard = 1;
@@ -123,7 +124,7 @@ int main(int argc, char**argv) {
         }
     }
     if (frontend == 0 || ((proxy_ip == NULL || proxy_port == 0 || proxy_deny_pattern == NULL)
-                    && blacklist == NULL && squidguard == 0)) {
+                    && strlen(blacklist[0]) == 0 && squidguard == 0)) {
         usage();
         exit(1);
     }
@@ -275,7 +276,7 @@ int main(int argc, char**argv) {
                             cached = 0;
 
                         // parse url to blacklist
-                        if (!cached && !denied && blacklist != NULL) {
+                        if (!cached && !denied && strlen(blacklist[0]) > 0) {
                             denied = blacklist_backend(blacklist, request.url, debug);
                         }
 

@@ -6,5 +6,8 @@
  * blacklist.h: blacklist backend
  */
 
-extern int blacklist_backend(char *blacklist, char url[URL_SIZE], int debug);
+#define BLACKLIST_MAXSIZE 1000
+
+extern int blacklist_load(const char *blacklist_file, char blacklist[BLACKLIST_MAXSIZE][URL_SIZE]);
+extern int blacklist_backend(char blacklist[BLACKLIST_MAXSIZE][URL_SIZE], char url[URL_SIZE], int debug);
 
