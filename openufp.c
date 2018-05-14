@@ -174,148 +174,146 @@ int main(int argc, char**argv) {
     syslog(LOG_INFO, "v%s: Jeroen Nijhof <jeroen@jeroennijhof.nl>", VERSION); 
     syslog(LOG_INFO, "started listening on %d, waiting for requests...", local_port); 
 
-    if ((pid = fork()) == 0) {
-        struct sockaddr_in cli_addr;
-        socklen_t cli_size;
-        int cli_fd;
+    struct sockaddr_in cli_addr;
+    socklen_t cli_size;
+    int cli_fd;
 
-        for(;;) {
-            cli_size = sizeof(cli_addr);
-            cli_fd = accept(openufp_fd, (struct sockaddr *)&cli_addr, &cli_size);
-            syslog(LOG_INFO, "client connection accepted.");
+    for(;;) {
+        cli_size = sizeof(cli_addr);
+        cli_fd = accept(openufp_fd, (struct sockaddr *)&cli_addr, &cli_size);
+        syslog(LOG_INFO, "client connection accepted.");
 
-            if ((child_pid = fork()) == 0) {
-                close(openufp_fd);
-                int msgsize = 0;
-                int denied = 0;
-                char msg[REQ_SIZE];
-                struct uf_request request;
+        if ((child_pid = fork()) == 0) {
+            close(openufp_fd);
+            int msgsize = 0;
+            int denied = 0;
+            char msg[REQ_SIZE];
+            struct uf_request request;
 
-                DB *cachedb = NULL;
-                if (cache_exp_secs > 0)
-                    cachedb = open_cache();
-                else
-                    syslog(LOG_INFO, "caching disabled.");
+            DB *cachedb = NULL;
+            if (cache_exp_secs > 0)
+                cachedb = open_cache();
+            else
+                syslog(LOG_INFO, "caching disabled.");
 
-                int cached = 0;
-                char hash[10];
-                struct n2h2_req *n2h2_request = NULL;
-                struct websns_req *websns_request = NULL;
-                for(;;) {
-                    bzero(&msg, sizeof(msg));
-                    msgsize = recvfrom(cli_fd, msg, REQ_SIZE, 0, (struct sockaddr *)&cli_addr, &cli_size);
-                    if (msgsize < 1) {
-                        syslog(LOG_WARNING, "connection closed by client.");
-                        close_cache(cachedb, debug);
-                        close(cli_fd);
-                        exit(1);
-                    }
-
-                    // Validate request
-                    if (frontend == N2H2) {
-                        n2h2_request = (struct n2h2_req *)msg;
-                        request = n2h2_validate(n2h2_request, msgsize);
-                    } else {
-                        websns_request = (struct websns_req *)msg;
-
-			//secret debug
-                        if(debug > 3)
-			{
-		        	syslog(LOG_INFO, "Websense debug request output: size %d, vers_maj %d, vers_min %d, vers_pat %d, serial %d, code %d, desc %d, srcip %d, dstip %d, urlsize %d, url %s",
-                                                 websns_request->size, websns_request->vers_maj, websns_request->vers_min, websns_request->vers_pat, websns_request->serial, websns_request->code, websns_request->desc, websns_request->srcip, websns_request->dstip, websns_request->urlsize, websns_request->url);
-			}
-                        websns_convert(websns_request, msg, msgsize, debug);
-                        request = websns_validate(websns_request, msgsize);
-
-                    }
-                    if (request.type == UNKNOWN) {
-                        syslog(LOG_WARNING, "request type not known, closing connecion.");
-                        close_cache(cachedb, debug);
-                        close(cli_fd);
-                        exit(1);
-                    }
-
-                    // Alive request
-                    if (request.type == N2H2_ALIVE) {
-                        if (debug > 2)
-                            syslog(LOG_INFO, "n2h2: received alive request, sending alive response.");
-                        n2h2_alive(cli_fd, n2h2_request);
-                    }
-                    if (request.type == WEBSNS_ALIVE) {
-                        if (debug > 2)
-                            syslog(LOG_INFO, "websns: received alive request, sending alive response.");
-                        websns_alive(cli_fd, websns_request);
-                    }
-
-                    // URL request
-                    if (request.type == N2H2_REQ || request.type == WEBSNS_REQ) {
-                        if (debug > 0) {
-                            syslog(LOG_INFO, "received url request - Original URL: %s", request.url);
-			}
-
-			// Handle HTTPS for N2H2 only since IP is provided in URI:
-			if (strstr(https, request.url) != NULL && request.type == N2H2_REQ) {
-			    if (debug > 0) {
-			    	syslog(LOG_INFO, "received HTTPS url request");
-			    }
-			}
-
-                        // check if cached
-                        get_hash(request.url, hash);
-                        cached = in_cache(cachedb, hash, cache_exp_secs, debug);
-                        if (cached == -1) // Happens when there is a cache problem
-                            cached = 0;
-
-                        // parse url to blacklist
-                        if (!cached && !denied && blacklist != NULL) {
-                            denied = blacklist_backend(blacklist, request.url, debug);
-                        }
-
-                        // parse url to proxy
-                        if (!cached && !denied && proxy_ip != NULL) {
-                            denied = proxy_backend(proxy_ip, proxy_port, proxy_deny_pattern, request.url, debug);
-                        }
-
-                        // parse url to squidguard
-                        if (!cached && !denied && squidguard) {
-                            denied = squidguard_backend(request.srcip, request.usr, request.url, sg_redirect, debug);
-                        }
-
-                        if (denied) {
-                            if (frontend == N2H2 && squidguard) {
-                                n2h2_deny(cli_fd, n2h2_request, sg_redirect);
-                            } else if (frontend == WEBSNS && squidguard) {
-                                websns_deny(cli_fd, websns_request, sg_redirect);
-                            } else if (frontend == N2H2) {
-                                n2h2_deny(cli_fd, n2h2_request, redirect_url);
-                            } else {
-                                websns_deny(cli_fd, websns_request, redirect_url);
-                            }
-
-                            if (debug > 0) {
-                                syslog(LOG_INFO, "url denied: srcip %s, srcusr %s, dstip %s, url %s",
-                                    request.srcip, request.usr, request.dstip, request.url);
-			    }
-                        } else {
-                            if (frontend == N2H2) {
-                                n2h2_accept(cli_fd, n2h2_request);
-                            } else {
-                                websns_accept(cli_fd, websns_request);
-                            }
-                            if (!cached)
-                                add_cache(cachedb, hash, debug);
-                            if (debug > 0)
-                                syslog(LOG_INFO, "url accepted: srcip %s, dstip %s, url %s",
-                                                 request.srcip, request.dstip, request.url);
-                        }
-                        // reset denied
-                        denied = 0;
-                    }
+            int cached = 0;
+            char hash[10];
+            struct n2h2_req *n2h2_request = NULL;
+            struct websns_req *websns_request = NULL;
+            for(;;) {
+                bzero(&msg, sizeof(msg));
+                msgsize = recvfrom(cli_fd, msg, REQ_SIZE, 0, (struct sockaddr *)&cli_addr, &cli_size);
+                if (msgsize < 1) {
+                    syslog(LOG_WARNING, "connection closed by client.");
+                    close_cache(cachedb, debug);
+                    close(cli_fd);
+                    exit(1);
                 }
-                close_cache(cachedb, debug);
-            }
-            close(cli_fd);
+
+                // Validate request
+                if (frontend == N2H2) {
+                    n2h2_request = (struct n2h2_req *)msg;
+                    request = n2h2_validate(n2h2_request, msgsize);
+                } else {
+                    websns_request = (struct websns_req *)msg;
+
+        //secret debug
+                    if(debug > 3)
+        {
+                syslog(LOG_INFO, "Websense debug request output: size %d, vers_maj %d, vers_min %d, vers_pat %d, serial %d, code %d, desc %d, srcip %d, dstip %d, urlsize %d, url %s",
+                                             websns_request->size, websns_request->vers_maj, websns_request->vers_min, websns_request->vers_pat, websns_request->serial, websns_request->code, websns_request->desc, websns_request->srcip, websns_request->dstip, websns_request->urlsize, websns_request->url);
         }
+                    websns_convert(websns_request, msg, msgsize, debug);
+                    request = websns_validate(websns_request, msgsize);
+
+                }
+                if (request.type == UNKNOWN) {
+                    syslog(LOG_WARNING, "request type not known, closing connecion.");
+                    close_cache(cachedb, debug);
+                    close(cli_fd);
+                    exit(1);
+                }
+
+                // Alive request
+                if (request.type == N2H2_ALIVE) {
+                    if (debug > 2)
+                        syslog(LOG_INFO, "n2h2: received alive request, sending alive response.");
+                    n2h2_alive(cli_fd, n2h2_request);
+                }
+                if (request.type == WEBSNS_ALIVE) {
+                    if (debug > 2)
+                        syslog(LOG_INFO, "websns: received alive request, sending alive response.");
+                    websns_alive(cli_fd, websns_request);
+                }
+
+                // URL request
+                if (request.type == N2H2_REQ || request.type == WEBSNS_REQ) {
+                    if (debug > 0) {
+                        syslog(LOG_INFO, "received url request - Original URL: %s", request.url);
+        }
+
+        // Handle HTTPS for N2H2 only since IP is provided in URI:
+        if (strstr(https, request.url) != NULL && request.type == N2H2_REQ) {
+            if (debug > 0) {
+                syslog(LOG_INFO, "received HTTPS url request");
+            }
+        }
+
+                    // check if cached
+                    get_hash(request.url, hash);
+                    cached = in_cache(cachedb, hash, cache_exp_secs, debug);
+                    if (cached == -1) // Happens when there is a cache problem
+                        cached = 0;
+
+                    // parse url to blacklist
+                    if (!cached && !denied && blacklist != NULL) {
+                        denied = blacklist_backend(blacklist, request.url, debug);
+                    }
+
+                    // parse url to proxy
+                    if (!cached && !denied && proxy_ip != NULL) {
+                        denied = proxy_backend(proxy_ip, proxy_port, proxy_deny_pattern, request.url, debug);
+                    }
+
+                    // parse url to squidguard
+                    if (!cached && !denied && squidguard) {
+                        denied = squidguard_backend(request.srcip, request.usr, request.url, sg_redirect, debug);
+                    }
+
+                    if (denied) {
+                        if (frontend == N2H2 && squidguard) {
+                            n2h2_deny(cli_fd, n2h2_request, sg_redirect);
+                        } else if (frontend == WEBSNS && squidguard) {
+                            websns_deny(cli_fd, websns_request, sg_redirect);
+                        } else if (frontend == N2H2) {
+                            n2h2_deny(cli_fd, n2h2_request, redirect_url);
+                        } else {
+                            websns_deny(cli_fd, websns_request, redirect_url);
+                        }
+
+                        if (debug > 0) {
+                            syslog(LOG_INFO, "url denied: srcip %s, srcusr %s, dstip %s, url %s",
+                                request.srcip, request.usr, request.dstip, request.url);
+            }
+                    } else {
+                        if (frontend == N2H2) {
+                            n2h2_accept(cli_fd, n2h2_request);
+                        } else {
+                            websns_accept(cli_fd, websns_request);
+                        }
+                        if (!cached)
+                            add_cache(cachedb, hash, debug);
+                        if (debug > 0)
+                            syslog(LOG_INFO, "url accepted: srcip %s, dstip %s, url %s",
+                                             request.srcip, request.dstip, request.url);
+                    }
+                    // reset denied
+                    denied = 0;
+                }
+            }
+            close_cache(cachedb, debug);
+        }
+        close(cli_fd);
     }
     close(openufp_fd);
     closelog();
