@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <regex.h>
 
-#define VERSION "1.09"
+#define VERSION "1.10"
 #define URL_SIZE 65535
 #define REQ_SIZE 65535
 

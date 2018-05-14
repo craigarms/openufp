@@ -121,7 +121,7 @@ int main(int argc, char**argv) {
             case 'g':
                 squidguard = 1;
                 break;
-            case 'F'
+            case 'F':
                 foreground = 1;
                 break;
             default:
