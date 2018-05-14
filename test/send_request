@@ -5,7 +5,7 @@ import socket
 import time
 
 def usage():
-    print('Usage: send_request [-h|--help] [-n|--n2h2|-w|--websense] [-a|--alive] [-u|--url <url>]')
+    print('Usage: send_request [-h|--help] [-n|--n2h2|-w|--websense] [-a|--alive] [-u|--url <url>] [-s|--server <servername|ip>]')
 
 def send_alive(s, protocol):
     if protocol == 'n2h2':
@@ -67,7 +67,7 @@ def send_url(s, protocol, url):
 
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'hp:au:', ['help', 'protocol', 'alive', 'url'])
+        opts, args = getopt.getopt(sys.argv[1:], 'hp:au:', ['help', 'n2h2','websense', 'alive', 'url','server'])
     except getopt.GetoptError as err:
         print(str(err))
         usage()
@@ -76,6 +76,7 @@ def main():
     protocol = ''
     alive = 0
     url = ''
+    host = ''
     for o, a in opts:
         if o in ('-h', '--help'):
             usage()
@@ -88,6 +89,8 @@ def main():
             alive = 1
         elif o in ('-u', '--url'):
             url = a
+        elif o in ('-s', '--server'):
+            host = a
         else:
             assert False, 'unhandled option'
 
@@ -95,7 +98,8 @@ def main():
         usage()
         sys.exit()
 
-    host = 'localhost'
+    if host == '':
+        host = 'localhost'
     if protocol == 'n2h2':
         port = 4005
     else:
