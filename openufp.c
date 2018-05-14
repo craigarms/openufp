@@ -27,7 +27,7 @@ void usage() {
     printf("   -r URL    when url is denied the client will be redirected to this url; n2h2 only\n");
     printf("   -c SECS   cache expire time in seconds; default 3600; 0 disables caching\n");
     printf("   -C URL    remove specified URL from cache\n");
-    printf("   -d LEVEL  debug level 1-3\n\n");
+    printf("   -d LEVEL  debug level 1-3\n");
     printf("   -F        run in foreground, don't fork main process\n\n");
     printf("FRONTEND:\n");
     printf("   -n        act as n2h2 server\n");
@@ -178,7 +178,7 @@ int main(int argc, char**argv) {
 
     printf("openufp v%s: started.\n", VERSION);
     openlog("openufp", LOG_PID|LOG_CONS, LOG_DAEMON);
-    syslog(LOG_INFO, "v%s: Jeroen Nijhof <jeroen@jeroennijhof.nl>", VERSION); 
+    syslog(LOG_INFO, "v%s: Forked from Jeroen Nijhof <jeroen@jeroennijhof.nl> v1.09 by Craig Armstrong", VERSION);
     syslog(LOG_INFO, "started listening on %d, waiting for requests...", local_port); 
 
     if(foreground == 0){
