@@ -5,25 +5,25 @@ import socket
 import time
 
 def usage():
-    print 'Usage: send_request [-h|--help] -p|--protocol <n2h2|websense> [-a|--alive] [-u|--url <url>]'
+    print('Usage: send_request [-h|--help] -p|--protocol <n2h2|websense> [-a|--alive] [-u|--url <url>]')
 
 def send_alive(s, protocol):
     if protocol == 'n2h2':
-        print 'Sending alive request'
+        print('Sending alive request')
         alive = '\x02\x03\x01\x02\x02\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
         s.sendall(alive)
         data = s.recv(256)
-        print 'Received', repr(data)
+        print('Received', repr(data))
     else:
-        print 'Sending alive request'
+        print('Sending alive request')
         alive = '\x00\x0c\x00\x81\x00\x01\x00\x00\x02\x0a\x09\x09'
         s.sendall(alive)
         data = s.recv(256)
-        print 'Received', repr(data)
+        print('Received', repr(data))
 
 def send_url(s, protocol, url):
     if protocol == 'n2h2':
-        print 'Sending url request: %s' % url
+        print('Sending url request: %s' % url)
         hdr = '\x02\x00\x01\x01\x01\x01'
         srcip = [192, 168, 0, 1]
         destip = [192, 168, 100, 1]
@@ -41,9 +41,9 @@ def send_url(s, protocol, url):
         url_req += '\x00'
         s.sendall(url_req)
         data = s.recv(1024)
-        print 'Received', repr(data)
+        print('Received', repr(data))
     else:
-        print 'Sending url request: %s' % url
+        print('Sending url request: %s', url)
         len1 = (26+len(url)) / 256
         len2 = (26+len(url)) % 256
         url_req = chr(len1)
@@ -62,14 +62,14 @@ def send_url(s, protocol, url):
         url_req += str(url)
         s.sendall(url_req)
         data = s.recv(1024)
-        print 'Received', repr(data)
+        print('Received', repr(data))
         
 
 def main():
     try:
         opts, args = getopt.getopt(sys.argv[1:], 'hp:au:', ['help', 'protocol', 'alive', 'url'])
-    except getopt.GetoptError, err:
-        print str(err)
+    except getopt.GetoptError as err:
+        print(str(err))
         usage()
         sys.exit(1)
 
