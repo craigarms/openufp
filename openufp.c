@@ -69,7 +69,7 @@ int main(int argc, char**argv) {
     int c;
     char *https = "https://";
 
-    while ((c = getopt(argc, argv, "l:r:c:C:d:nwp:f:gu")) != -1) {
+    while ((c = getopt(argc, argv, "l:r:c:C:d:nwp:f:guF")) != -1) {
         char *p;
         char hash[10];
         DB *cachedb;
