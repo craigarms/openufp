@@ -5,7 +5,7 @@ import socket
 import time
 
 def usage():
-    print('Usage: send_request [-h|--help] -p|--protocol <n2h2|websense> [-a|--alive] [-u|--url <url>]')
+    print('Usage: send_request [-h|--help] [-n|--n2h2|-w|--websense] [-a|--alive] [-u|--url <url>]')
 
 def send_alive(s, protocol):
     if protocol == 'n2h2':
@@ -80,8 +80,10 @@ def main():
         if o in ('-h', '--help'):
             usage()
             sys.exit()
-        elif o in ('-p', '--protocol'):
-            protocol = a
+        elif o in ('-n', '--n2h2'):
+            protocol = 'n2h2'
+        elif o in ('-w','--websense'):
+            protocol = 'websense'
         elif o in ('-a', '--alive'):
             alive = 1
         elif o in ('-u', '--url'):
